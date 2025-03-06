@@ -1,13 +1,16 @@
 import * as sdpTransform from 'sdp-transform';
 import { DtlsParameters, IceCandidate, IceParameters } from "./types"
 
-export function setupPC() {
+export async function setupPC() {
     const pc = new RTCPeerConnection()
 
-    // const remoteSDP = new RemoteSdp()
+    pc.createDataChannel("hacky")
+    const offer = await pc.createOffer()
+
+    // const remoteSDP = new RemoteSdp({})
 }
 
-class RemoteSdp {
+export class RemoteSdp {
     // Remote ICE parameters.
     private _iceParameters?: IceParameters;
     // Remote ICE candidates.
@@ -21,12 +24,7 @@ class RemoteSdp {
             iceParameters,
             iceCandidates,
             dtlsParameters,
-        }:
-            {
-                iceParameters?: IceParameters;
-                iceCandidates?: IceCandidate[];
-                dtlsParameters?: DtlsParameters;
-            }
+        }: Parameters
     ) {
         this._iceParameters = iceParameters;
         this._iceCandidates = iceCandidates;
@@ -69,18 +67,59 @@ class RemoteSdp {
             this._sdpObject.groups = [{ type: 'BUNDLE', mids: '' }];
         }
 
-        this._sdpObject.media
-
     }
 
 
-    getAnswer() {
-
+    getAnswer(offerSDP: sdpTransform.SessionDescription) {
+        const media: {
+            type: string;
+            port: number;
+            protocol: string;
+            payloads?: string | undefined;
+        } & sdpTransform.MediaDescription = {
+            iceUfrag: this._iceParameters?.usernameFragment,
+            icePwd: this._iceParameters?.password,
+            type: "application",
+            port: 60415,
+            protocol: "UDP/DTLS/SCTP",
+            payloads: "webrtc-datachannel",
+            rtp: [],
+            fmtp: [],
+            mid: "0",
+            setup: "actpass",
+            connection: offerSDP.connection,
+        }
+        if (this._iceCandidates) {
+            this._iceCandidates.forEach((candidate) => {
+                const cd: {
+                    foundation: string;
+                    component: number;
+                    transport: string;
+                    priority: number | string;
+                    ip: string;
+                    port: number;
+                    type: string;
+                    raddr?: string | undefined;
+                    rport?: number | undefined;
+                    tcptype?: string | undefined;
+                    generation?: number | undefined;
+                    "network-id"?: number | undefined;
+                    "network-cost"?: number | undefined;
+                } = {
+                    ...candidate,
+                    transport: candidate.protocol,
+                    component: 1,
+                }
+                media.candidates?.push(cd)
+            })
+        }
+        this._sdpObject.media.push(media)
+        return sdpTransform.write(this._sdpObject)
     }
 }
 
 type Parameters = {
-    candidates: IceCandidate[],
-    dtlsParameters: DtlsParameters,
-    iceParameters: IceParameters,
+    iceParameters: IceParameters;
+    iceCandidates: IceCandidate[];
+    dtlsParameters: DtlsParameters;
 }
